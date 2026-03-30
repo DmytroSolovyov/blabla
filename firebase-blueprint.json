@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the shift manager application.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique identifier of the user." },
+        "email": { "type": "string", "format": "email", "description": "The user's email address." },
+        "role": { "type": "string", "enum": ["boss", "manager", "employee"], "description": "The user's role." },
+        "name": { "type": "string", "description": "The user's full name." }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Worker": {
+      "title": "Worker",
+      "description": "An employee who can be assigned to shifts.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The worker's name." },
+        "defaultColor": { "type": "string", "description": "Default color for the worker's shifts." },
+        "createdBy": { "type": "string", "description": "UID of the creator." }
+      },
+      "required": ["name", "createdBy"]
+    },
+    "Location": {
+      "title": "Location",
+      "description": "A cafe location where shifts take place.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the location." },
+        "createdBy": { "type": "string", "description": "UID of the creator." }
+      },
+      "required": ["name", "createdBy"]
+    },
+    "Shift": {
+      "title": "Shift",
+      "description": "A work shift assigned to an employee.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "description": "The date of the shift in YYYY-MM-DD format." },
+        "startTime": { "type": "string", "description": "The start time of the shift (e.g., 06:00)." },
+        "endTime": { "type": "string", "description": "The end time of the shift (e.g., 14:00)." },
+        "employeeName": { "type": "string", "description": "The name of the employee." },
+        "workerId": { "type": "string", "description": "The ID of the worker." },
+        "locationId": { "type": "string", "description": "The ID of the location." },
+        "color": { "type": "string", "description": "The background color for the shift block." },
+        "period": { "type": "string", "enum": ["AM", "PM"], "description": "Whether the shift is primarily in the AM or PM section." },
+        "createdBy": { "type": "string", "description": "The UID of the user who created the shift." }
+      },
+      "required": ["date", "startTime", "endTime", "employeeName", "color", "period", "createdBy", "locationId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles and roles."
+    },
+    "/shifts/{shiftId}": {
+      "schema": { "$ref": "#/entities/Shift" },
+      "description": "Stores all work shifts."
+    },
+    "/workers/{workerId}": {
+      "schema": { "$ref": "#/entities/Worker" },
+      "description": "Stores all workers."
+    },
+    "/locations/{locationId}": {
+      "schema": { "$ref": "#/entities/Location" },
+      "description": "Stores all cafe locations."
+    }
+  }
+}
