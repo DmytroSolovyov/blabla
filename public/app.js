@@ -1,3 +1,5 @@
+import { auth, db, provider, signInWithPopup, signOut, onAuthStateChanged, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where } from './firebase-init.js';
+
 // Add polyfill initialization at the top of app.js
 MobileDragDrop.polyfill({
     dragImageTranslateOverride: MobileDragDrop.scrollBehaviourDragImageTranslateOverride,
@@ -72,58 +74,134 @@ async function init() {
     setupEventListeners();
 }
 
-// API Calls
+// API Calls mapped to Firestore
 async function apiCall(url, options = {}) {
-    const res = await fetch(url, {
-        ...options,
-        headers: {
-            'Content-Type': 'application/json',
-            ...(options.headers || {})
+    const method = options.method || 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+    
+    // Parse URL
+    const urlObj = new URL(url, window.location.origin);
+    const path = urlObj.pathname;
+    const searchParams = urlObj.searchParams;
+    
+    const parts = path.split('/').filter(Boolean);
+    // e.g. ['api', 'workers', '123']
+    const collectionName = parts[1];
+    const docId = parts[2];
+    
+    try {
+        if (method === 'GET') {
+            if (docId) {
+                const docSnap = await getDoc(doc(db, collectionName, docId));
+                if (!docSnap.exists()) throw new Error('Not found');
+                return { id: docSnap.id, ...docSnap.data() };
+            } else {
+                let q = collection(db, collectionName);
+                
+                // Handle shifts query
+                if (collectionName === 'shifts') {
+                    const locId = searchParams.get('location_id');
+                    const startDate = searchParams.get('start_date');
+                    const endDate = searchParams.get('end_date');
+                    
+                    if (locId) {
+                        q = query(collection(db, 'shifts'), where('location_id', '==', locId));
+                    }
+                    
+                    const querySnapshot = await getDocs(q);
+                    let results = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    
+                    if (startDate) {
+                        results = results.filter(s => s.date >= startDate);
+                    }
+                    if (endDate) {
+                        results = results.filter(s => s.date <= endDate);
+                    }
+                    return results;
+                }
+                
+                const querySnapshot = await getDocs(q);
+                return querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            }
+        } else if (method === 'POST') {
+            const newDocRef = doc(collection(db, collectionName));
+            await setDoc(newDocRef, body);
+            return { id: newDocRef.id, ...body };
+        } else if (method === 'PUT') {
+            await updateDoc(doc(db, collectionName, docId), body);
+            return { id: docId, ...body };
+        } else if (method === 'DELETE') {
+            await deleteDoc(doc(db, collectionName, docId));
+            return { success: true };
         }
-    });
-    if (!res.ok) {
-        if (res.status === 401) {
-            showAuthScreen();
-            throw new Error('Unauthorized');
-        }
-        const err = await res.json();
-        throw new Error(err.error || 'API Error');
+    } catch (e) {
+        console.error("Firestore Error:", e);
+        throw new Error(e.message || 'API Error');
     }
-    return res.json();
 }
 
 // Auth
-async function checkAuth() {
-    try {
-        currentUser = await apiCall('/api/me');
-        await loadInitialData();
-        showMainScreen();
-    } catch (e) {
-        showAuthScreen();
-    }
+function checkAuth() {
+    return new Promise((resolve) => {
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                try {
+                    let userDoc = await getDoc(doc(db, 'users', user.uid));
+                    let userData = null;
+                    
+                    if (userDoc.exists()) {
+                        userData = userDoc.data();
+                    } else {
+                        // Check if admin pre-registered them by email
+                        const q = query(collection(db, 'users'), where('email', '==', user.email));
+                        const querySnapshot = await getDocs(q);
+                        if (!querySnapshot.empty) {
+                            const preRegDoc = querySnapshot.docs[0];
+                            userData = preRegDoc.data();
+                            // Move data to UID doc
+                            await setDoc(doc(db, 'users', user.uid), userData);
+                            await deleteDoc(doc(db, 'users', preRegDoc.id));
+                        } else {
+                            // Create default user profile
+                            userData = { email: user.email, role: 'worker' };
+                            // If it's the admin email, make them boss
+                            if (user.email === 'dmytro.solovyov1998@gmail.com') {
+                                userData.role = 'boss';
+                            }
+                            await setDoc(doc(db, 'users', user.uid), userData);
+                        }
+                    }
+                    
+                    currentUser = { id: user.uid, email: user.email, username: user.displayName || user.email.split('@')[0], ...userData };
+                    await loadInitialData();
+                    showMainScreen();
+                } catch (e) {
+                    console.error(e);
+                    showAuthScreen();
+                }
+            } else {
+                showAuthScreen();
+            }
+            resolve();
+        });
+    });
 }
 
-loginForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    
-    try {
-        currentUser = await apiCall('/api/login', {
-            method: 'POST',
-            body: JSON.stringify({ username, password })
-        });
-        loginError.classList.add('hidden');
-        await loadInitialData();
-        showMainScreen();
-    } catch (e) {
-        loginError.textContent = e.message;
-        loginError.classList.remove('hidden');
-    }
-});
+const googleSignInBtn = document.getElementById('google-signin-btn');
+if (googleSignInBtn) {
+    googleSignInBtn.addEventListener('click', async () => {
+        try {
+            await signInWithPopup(auth, provider);
+            loginError.classList.add('hidden');
+        } catch (e) {
+            loginError.textContent = e.message;
+            loginError.classList.remove('hidden');
+        }
+    });
+}
 
 async function logout() {
-    await apiCall('/api/logout', { method: 'POST' });
+    await signOut(auth);
     currentUser = null;
     showAuthScreen();
 }
@@ -489,10 +567,10 @@ function renderCalendar() {
             const name = worker ? worker.name : 'Unknown';
             const isOwnShift = currentUser.worker_id === shift.worker_id;
             const canEdit = isAdmin || isOwnShift;
-            const draggableAttr = canEdit ? `draggable="true" ondragstart="handleDragStart(event, ${shift.id})"` : '';
-            const deleteBtn = canEdit ? `<button class="delete-shift-icon" onclick="deleteShiftFast(event, ${shift.id})" title="Delete Shift"><i data-lucide="x" style="width: 12px; height: 12px;"></i></button>` : '';
+            const draggableAttr = canEdit ? `draggable="true" ondragstart="handleDragStart(event, '${shift.id}')"` : '';
+            const deleteBtn = canEdit ? `<button class="delete-shift-icon" onclick="deleteShiftFast(event, '${shift.id}')" title="Delete Shift"><i data-lucide="x" style="width: 12px; height: 12px;"></i></button>` : '';
             return `
-                <div class="shift-card" ${draggableAttr} style="background-color: ${color}20; border-left-color: ${color}; color: ${color}" onclick="${canEdit ? `openShiftModal(${shift.id})` : ''}; event.stopPropagation();">
+                <div class="shift-card" ${draggableAttr} style="background-color: ${color}20; border-left-color: ${color}; color: ${color}" onclick="${canEdit ? `openShiftModal('${shift.id}')` : ''}; event.stopPropagation();">
                     <div class="time">${shift.start_time} - ${shift.end_time}</div>
                     <div class="worker">${name}</div>
                     ${deleteBtn}
@@ -619,8 +697,8 @@ function renderWorkers() {
                     Max Hours: ${worker.maxHours}/week
                 </div>
                 <div class="card-actions">
-                    <button class="btn btn-secondary w-full" onclick="openWorkerModal(${worker.id})">Edit</button>
-                    <button class="btn btn-danger w-full" onclick="deleteWorker(${worker.id})">Delete</button>
+                    <button class="btn btn-secondary w-full" onclick="openWorkerModal('${worker.id}')">Edit</button>
+                    <button class="btn btn-danger w-full" onclick="deleteWorker('${worker.id}')">Delete</button>
                 </div>
             </div>
         `;
@@ -644,7 +722,7 @@ function renderLocations() {
                     </div>
                 </div>
                 <div class="card-actions">
-                    <button class="btn btn-danger w-full" onclick="deleteLocation(${loc.id})">Delete</button>
+                    <button class="btn btn-danger w-full" onclick="deleteLocation('${loc.id}')">Delete</button>
                 </div>
             </div>
         `;
@@ -664,12 +742,12 @@ function renderUsers() {
         
         tbody.innerHTML += `
             <tr>
-                <td>${user.username}</td>
+                <td>${user.email || user.username || 'N/A'}</td>
                 <td><span class="badge">${user.role}</span></td>
                 <td>${workerName}</td>
                 <td>
-                    <button class="icon-btn" onclick="openUserModal(${user.id})" style="display: inline-flex;"><i data-lucide="edit"></i></button>
-                    ${user.id !== currentUser.id ? `<button class="icon-btn" onclick="deleteUser(${user.id})" style="display: inline-flex; color: var(--danger);"><i data-lucide="trash"></i></button>` : ''}
+                    <button class="icon-btn" onclick="openUserModal('${user.id}')" style="display: inline-flex;"><i data-lucide="edit"></i></button>
+                    ${user.id !== currentUser.id ? `<button class="icon-btn" onclick="deleteUser('${user.id}')" style="display: inline-flex; color: var(--danger);"><i data-lucide="trash"></i></button>` : ''}
                 </td>
             </tr>
         `;
@@ -900,16 +978,13 @@ function openUserModal(userId = null) {
         const user = users.find(u => u.id === userId);
         document.getElementById('user-modal-title').textContent = 'Edit User';
         document.getElementById('user-id').value = user.id;
-        document.getElementById('user-username').value = user.username;
-        document.getElementById('user-password').value = '';
-        document.getElementById('user-password').required = false;
+        document.getElementById('user-email').value = user.email || user.username || '';
         document.getElementById('user-role').value = user.role;
         document.getElementById('user-worker-id').value = user.worker_id || '';
     } else {
         document.getElementById('user-modal-title').textContent = 'Add User';
         userForm.reset();
         document.getElementById('user-id').value = '';
-        document.getElementById('user-password').required = true;
     }
     openModal(userModal);
 }
@@ -918,17 +993,24 @@ userForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('user-id').value;
     const data = {
-        username: document.getElementById('user-username').value,
+        email: document.getElementById('user-email').value,
         role: document.getElementById('user-role').value,
         worker_id: document.getElementById('user-worker-id').value || null
     };
-    
-    const pwd = document.getElementById('user-password').value;
-    if (pwd) data.password = pwd;
 
     if (id) {
         await apiCall(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(data) });
     } else {
+        // For new users, we can't create Auth accounts from client without Admin SDK,
+        // but we can create the user document so they have roles when they sign in.
+        // We'll use their email as the document ID for simplicity, or let Firestore generate one.
+        // Actually, since we need their UID, we should just let Firestore generate an ID,
+        // and when they sign in, we can link it if needed.
+        // Wait, checkAuth uses user.uid. If we create a document with a random ID, it won't match.
+        // So we should use the email as the document ID for users?
+        // Let's just create a document. The checkAuth logic creates a new profile if it doesn't exist.
+        // If an admin creates a user, they are pre-registering them.
+        // Let's use the email as the document ID to make it easy to find.
         await apiCall('/api/users', { method: 'POST', body: JSON.stringify(data) });
     }
     
