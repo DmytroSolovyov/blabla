@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bellacaffe Shift Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0-rc.2/default.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0-rc.2/index.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- Auth Screen -->
+        <div id="auth-screen" class="screen hidden">
+            <div class="auth-container">
+                <h1 class="brand-title">BELLACAFFE</h1>
+                <p class="auth-subtitle">Welcome to the shift manager. Please sign in.</p>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-full">Sign In</button>
+                    <div id="login-error" class="error-msg hidden"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main App Screen -->
+        <div id="main-screen" class="screen hidden">
+            <header class="header">
+                <div class="header-content">
+                    <div class="header-left">
+                        <h1 class="brand-title-small">BELLACAFFE</h1>
+                        <span id="user-role-badge" class="badge"></span>
+                    </div>
+
+                    <nav class="desktop-nav">
+                        <div class="nav-tabs">
+                            <button class="nav-btn active" data-tab="calendar"><i data-lucide="calendar"></i> Calendar</button>
+                            <button class="nav-btn" data-tab="reports"><i data-lucide="clock"></i> Hours</button>
+                            <button class="nav-btn admin-only hidden" data-tab="workers"><i data-lucide="users"></i> Workers</button>
+                            <button class="nav-btn admin-only hidden" data-tab="locations"><i data-lucide="map-pin"></i> Locations</button>
+                            <button class="nav-btn admin-only hidden" data-tab="users"><i data-lucide="settings"></i> Users</button>
+                        </div>
+
+                        <select id="location-select" class="location-select hidden"></select>
+
+                        <div class="header-right">
+                            <span id="user-name-display" class="user-name"></span>
+                            <button id="logout-btn" class="icon-btn" title="Sign out"><i data-lucide="log-out"></i></button>
+                        </div>
+                    </nav>
+
+                    <div class="mobile-nav-toggle">
+                        <select id="mobile-location-select" class="location-select hidden"></select>
+                        <button id="mobile-menu-btn" class="icon-btn"><i data-lucide="menu"></i></button>
+                    </div>
+                </div>
+
+                <!-- Mobile Menu -->
+                <div id="mobile-menu" class="mobile-menu hidden">
+                    <div class="mobile-user-info">
+                        <div id="mobile-user-avatar" class="avatar"></div>
+                        <div class="user-details">
+                            <span id="mobile-user-name" class="name"></span>
+                            <span id="mobile-user-role" class="role"></span>
+                        </div>
+                    </div>
+                    <div class="mobile-nav-links">
+                        <button class="mobile-nav-btn active" data-tab="calendar"><i data-lucide="calendar"></i> Calendar View</button>
+                        <button class="mobile-nav-btn" data-tab="reports"><i data-lucide="clock"></i> Hours Report</button>
+                        <button class="mobile-nav-btn admin-only hidden" data-tab="workers"><i data-lucide="users"></i> Manage Workers</button>
+                        <button class="mobile-nav-btn admin-only hidden" data-tab="locations"><i data-lucide="map-pin"></i> Manage Locations</button>
+                        <button class="mobile-nav-btn admin-only hidden" data-tab="users"><i data-lucide="settings"></i> Manage Users</button>
+                    </div>
+                    <button id="mobile-logout-btn" class="mobile-logout-btn"><i data-lucide="log-out"></i> Sign Out</button>
+                </div>
+            </header>
+
+            <main class="main-content">
+                <!-- Calendar Tab -->
+                <div id="tab-calendar" class="tab-content active">
+                    <div id="no-locations-msg" class="empty-state hidden">
+                        <i data-lucide="map-pin" class="empty-icon"></i>
+                        <h2>No Locations Found</h2>
+                        <p>You need to add at least one location before you can manage shifts.</p>
+                        <button id="go-to-locations-btn" class="btn btn-primary admin-only hidden">Go to Locations</button>
+                    </div>
+                    <div id="calendar-view" class="calendar-view hidden">
+                        <div class="calendar-header">
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <button id="prev-month-btn" class="icon-btn"><i data-lucide="chevron-left"></i></button>
+                                <h2 id="current-month-display"></h2>
+                                <button id="next-month-btn" class="icon-btn"><i data-lucide="chevron-right"></i></button>
+                            </div>
+                            <button id="export-calendar-btn" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;"><i data-lucide="download" style="width: 16px; height: 16px;"></i> Export</button>
+                        </div>
+                        <div class="calendar-scroll-container">
+                            <div class="calendar-grid" id="calendar-grid">
+                                <!-- Rendered by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reports Tab -->
+                <div id="tab-reports" class="tab-content hidden">
+                    <div class="section-header">
+                        <h2>Hours Report</h2>
+                        <div class="date-filters">
+                            <input type="date" id="report-start-date">
+                            <span>to</span>
+                            <input type="date" id="report-end-date">
+                            <button id="generate-report-btn" class="btn btn-primary">Generate</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Worker</th>
+                                    <th>Position</th>
+                                    <th>Total Hours</th>
+                                    <th>Max Hours</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reports-table-body">
+                                <!-- Rendered by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Workers Tab -->
+                <div id="tab-workers" class="tab-content hidden">
+                    <div class="section-header">
+                        <h2>Manage Workers</h2>
+                        <button id="add-worker-btn" class="btn btn-primary"><i data-lucide="plus"></i> Add Worker</button>
+                    </div>
+                    <div class="grid-cards" id="workers-list">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Locations Tab -->
+                <div id="tab-locations" class="tab-content hidden">
+                    <div class="section-header">
+                        <h2>Manage Locations</h2>
+                        <button id="add-location-btn" class="btn btn-primary"><i data-lucide="plus"></i> Add Location</button>
+                    </div>
+                    <div class="grid-cards" id="locations-list">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Users Tab -->
+                <div id="tab-users" class="tab-content hidden">
+                    <div class="section-header">
+                        <h2>Manage Users</h2>
+                        <button id="add-user-btn" class="btn btn-primary"><i data-lucide="plus"></i> Add User</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Role</th>
+                                    <th>Linked Worker</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body">
+                                <!-- Rendered by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay hidden"></div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="modal hidden" style="max-width: 400px; z-index: 200;">
+        <div class="modal-header">
+            <h3 id="confirm-title">Confirm</h3>
+            <button class="close-confirm icon-btn"><i data-lucide="x"></i></button>
+        </div>
+        <div style="padding: 1.5rem;">
+            <p id="confirm-message" style="margin-bottom: 1.5rem;"></p>
+            <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+                <button class="btn btn-secondary close-confirm">Cancel</button>
+                <button id="confirm-yes-btn" class="btn btn-danger">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shift Modal -->
+    <div id="shift-modal" class="modal hidden">
+        <div class="modal-header">
+            <h3 id="shift-modal-title">Add Shift</h3>
+            <button class="close-modal icon-btn"><i data-lucide="x"></i></button>
+        </div>
+        <form id="shift-form">
+            <input type="hidden" id="shift-id">
+            <input type="hidden" id="shift-date">
+            <div class="form-group">
+                <label for="shift-worker">Worker</label>
+                <select id="shift-worker" required></select>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="shift-start">Start Time</label>
+                    <input type="time" id="shift-start" required>
+                </div>
+                <div class="form-group">
+                    <label for="shift-end">End Time</label>
+                    <input type="time" id="shift-end" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="shift-notes">Notes</label>
+                <input type="text" id="shift-notes">
+            </div>
+            <div class="modal-actions">
+                <button type="button" id="delete-shift-btn" class="btn btn-danger hidden">Delete</button>
+                <div class="spacer"></div>
+                <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Worker Modal -->
+    <div id="worker-modal" class="modal hidden">
+        <div class="modal-header">
+            <h3 id="worker-modal-title">Add Worker</h3>
+            <button class="close-modal icon-btn"><i data-lucide="x"></i></button>
+        </div>
+        <form id="worker-form">
+            <input type="hidden" id="worker-id">
+            <div class="form-group">
+                <label for="worker-name">Name</label>
+                <input type="text" id="worker-name" required>
+            </div>
+            <div class="form-group">
+                <label for="worker-position">Position</label>
+                <input type="text" id="worker-position" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="worker-color">Color</label>
+                    <input type="color" id="worker-color" value="#3b82f6" required>
+                </div>
+                <div class="form-group">
+                    <label for="worker-max-hours">Max Hours/Week</label>
+                    <input type="number" id="worker-max-hours" value="40" required>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Location Modal -->
+    <div id="location-modal" class="modal hidden">
+        <div class="modal-header">
+            <h3 id="location-modal-title">Add Location</h3>
+            <button class="close-modal icon-btn"><i data-lucide="x"></i></button>
+        </div>
+        <form id="location-form">
+            <input type="hidden" id="location-id">
+            <div class="form-group">
+                <label for="location-name">Name</label>
+                <input type="text" id="location-name" required>
+            </div>
+            <div class="form-group">
+                <label for="location-address">Address</label>
+                <input type="text" id="location-address" required>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- User Modal -->
+    <div id="user-modal" class="modal hidden">
+        <div class="modal-header">
+            <h3 id="user-modal-title">Add User</h3>
+            <button class="close-modal icon-btn"><i data-lucide="x"></i></button>
+        </div>
+        <form id="user-form">
+            <input type="hidden" id="user-id">
+            <div class="form-group">
+                <label for="user-username">Username</label>
+                <input type="text" id="user-username" required>
+            </div>
+            <div class="form-group">
+                <label for="user-password">Password <span class="text-xs text-gray-400">(leave blank to keep current)</span></label>
+                <input type="password" id="user-password">
+            </div>
+            <div class="form-group">
+                <label for="user-role">Role</label>
+                <select id="user-role" required>
+                    <option value="employee">Employee</option>
+                    <option value="manager">Manager</option>
+                    <option value="boss">Boss</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="user-worker-id">Linked Worker (Optional)</label>
+                <select id="user-worker-id">
+                    <option value="">None</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+
+    <script src="app.js?v=2"></script>
+</body>
+</html>
