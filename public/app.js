@@ -1039,3 +1039,11 @@ function setupEventListeners() {
 
 // Start
 init();
+
+// Expose functions to window for inline HTML handlers
+window.openShiftModal = openShiftModal;
+window.openWorkerModal = openWorkerModal;
+window.deleteWorker = deleteWorker;
+window.deleteLocation = deleteLocation;
+window.openUserModal = openUserModal;
+window.deleteUser = deleteUser;
