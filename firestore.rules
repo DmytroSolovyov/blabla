@@ -10,20 +10,23 @@ service cloud.firestore {
     }
     
     function getUserDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let doc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return doc == null ? null : doc.data;
     }
     
     function isBossOrManager() {
-      let role = getUserDoc().role;
-      return role == 'boss' || role == 'manager';
+      let doc = getUserDoc();
+      return doc != null && (doc.role == 'boss' || doc.role == 'manager');
     }
     
     function isWorker() {
-      return getUserDoc().role == 'worker';
+      let doc = getUserDoc();
+      return doc != null && doc.role == 'worker';
     }
     
     function getWorkerId() {
-      return getUserDoc().worker_id;
+      let doc = getUserDoc();
+      return doc != null ? doc.worker_id : null;
     }
 
     function isOwner(userId) {
