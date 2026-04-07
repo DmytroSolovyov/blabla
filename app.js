@@ -630,12 +630,16 @@ function renderCalendar() {
 document.getElementById('generate-report-btn').addEventListener('click', renderReports);
 
 async function renderReports() {
-    const startInput = document.getElementById('report-start-date').value;
-    const endInput = document.getElementById('report-end-date').value;
+    const monthInput = document.getElementById('report-month').value;
     
     let query = '/api/shifts?';
-    if (startInput) query += `start_date=${startInput}&`;
-    if (endInput) query += `end_date=${endInput}`;
+    if (monthInput) {
+        const [year, month] = monthInput.split('-');
+        const startDate = `${year}-${month}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const endDate = `${year}-${month}-${lastDay}`;
+        query += `start_date=${startDate}&end_date=${endDate}`;
+    }
     
     const reportShifts = await apiCall(query);
     
@@ -662,22 +666,8 @@ async function renderReports() {
     const tbody = document.getElementById('reports-table-body');
     tbody.innerHTML = '';
     
-    // Add debug row
-    tbody.innerHTML += `
-        <tr>
-            <td colspan="5" style="background: #f0f0f0; font-family: monospace; font-size: 10px;">
-                Debug: Shifts fetched: ${reportShifts.length}, 
-                Worker IDs in shifts: ${JSON.stringify(reportShifts.map(s => s.worker_id))}, 
-                Worker IDs in workers: ${JSON.stringify(workers.map(w => w.id))},
-                WorkerHours keys: ${JSON.stringify(Object.keys(workerHours))},
-                WorkerHours values: ${JSON.stringify(workerHours)}
-            </td>
-        </tr>
-    `;
-    
     workers.forEach(worker => {
         const hours = workerHours[worker.id] || 0;
-        const isOver = hours > worker.maxHours;
         
         tbody.innerHTML += `
             <tr>
@@ -686,11 +676,7 @@ async function renderReports() {
                     ${worker.name}
                 </td>
                 <td>${worker.position}</td>
-                <td style="font-weight: bold; color: ${isOver ? 'var(--danger)' : 'inherit'}">${hours.toFixed(1)}</td>
-                <td>${worker.maxHours}</td>
-                <td>
-                    ${isOver ? `<span class="badge" style="background-color: rgba(239, 68, 68, 0.2); color: #f87171;">Overtime</span>` : `<span class="badge" style="background-color: rgba(34, 197, 94, 0.2); color: #4ade80;">Normal</span>`}
-                </td>
+                <td style="font-weight: bold;">${hours.toFixed(1)}</td>
             </tr>
         `;
     });
@@ -714,9 +700,6 @@ function renderWorkers() {
                         </div>
                         <div class="card-subtitle">${worker.position}</div>
                     </div>
-                </div>
-                <div style="margin-bottom: 1rem; color: var(--text-muted); font-size: 0.875rem;">
-                    Max Hours: ${worker.maxHours}/week
                 </div>
                 <div class="card-actions">
                     <button class="btn btn-secondary w-full" onclick="openWorkerModal('${worker.id}')">Edit</button>
@@ -875,6 +858,9 @@ function openShiftModal(shiftId = null, date = null) {
         shiftForm.reset();
         document.getElementById('shift-id').value = '';
         document.getElementById('shift-date').value = date;
+        if (currentUser.worker_id) {
+            document.getElementById('shift-worker').value = currentUser.worker_id;
+        }
         deleteShiftBtn.classList.add('hidden');
     }
     openModal(shiftModal);
@@ -922,7 +908,6 @@ function openWorkerModal(workerId = null) {
         document.getElementById('worker-name').value = worker.name;
         document.getElementById('worker-position').value = worker.position;
         document.getElementById('worker-color').value = worker.color;
-        document.getElementById('worker-max-hours').value = worker.maxHours;
     } else {
         document.getElementById('worker-modal-title').textContent = 'Add Worker';
         workerForm.reset();
@@ -938,8 +923,7 @@ workerForm.addEventListener('submit', async (e) => {
     const data = {
         name: document.getElementById('worker-name').value,
         position: document.getElementById('worker-position').value,
-        color: document.getElementById('worker-color').value,
-        maxHours: parseInt(document.getElementById('worker-max-hours').value)
+        color: document.getElementById('worker-color').value
     };
 
     if (id) {
@@ -1053,13 +1037,11 @@ async function deleteUser(id) {
 }
 
 function setupEventListeners() {
-    // Set default dates for report
+    // Set default month for report
     const today = new Date();
-    const lastWeek = new Date();
-    lastWeek.setDate(today.getDate() - 7);
-    
-    document.getElementById('report-start-date').value = lastWeek.toISOString().split('T')[0];
-    document.getElementById('report-end-date').value = today.toISOString().split('T')[0];
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    document.getElementById('report-month').value = `${year}-${month}`;
 }
 
 // Start

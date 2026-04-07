@@ -108,9 +108,7 @@
                     <div class="section-header">
                         <h2>Hours Report</h2>
                         <div class="date-filters">
-                            <input type="date" id="report-start-date">
-                            <span>to</span>
-                            <input type="date" id="report-end-date">
+                            <input type="month" id="report-month">
                             <button id="generate-report-btn" class="btn btn-primary">Generate</button>
                         </div>
                     </div>
@@ -121,8 +119,6 @@
                                     <th>Worker</th>
                                     <th>Position</th>
                                     <th>Total Hours</th>
-                                    <th>Max Hours</th>
-                                    <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody id="reports-table-body">
@@ -254,10 +250,6 @@
                 <div class="form-group">
                     <label for="worker-color">Color</label>
                     <input type="color" id="worker-color" value="#3b82f6" required>
-                </div>
-                <div class="form-group">
-                    <label for="worker-max-hours">Max Hours/Week</label>
-                    <input type="number" id="worker-max-hours" value="40" required>
                 </div>
             </div>
             <div class="modal-actions">
