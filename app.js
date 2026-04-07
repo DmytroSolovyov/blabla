@@ -136,6 +136,7 @@ async function apiCall(url, options = {}) {
         }
     } catch (e) {
         console.error("Firestore Error:", e);
+        alert("Error: " + (e.message || 'API Error'));
         throw new Error(e.message || 'API Error');
     }
 }
@@ -188,6 +189,28 @@ function checkAuth() {
 }
 
 const googleSignInBtn = document.getElementById('google-signin-btn');
+const loginError = document.getElementById('login-error');
+
+function isInAppBrowser() {
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    return (ua.indexOf("FBAN") > -1) || 
+           (ua.indexOf("FBAV") > -1) || 
+           (ua.indexOf("Instagram") > -1) || 
+           (ua.indexOf("Line") > -1) || 
+           (ua.indexOf("Messenger") > -1) ||
+           (ua.indexOf("Snapchat") > -1);
+}
+
+if (isInAppBrowser()) {
+    loginError.innerHTML = "⚠️ <b>Warning:</b> You are using an in-app browser (like Messenger). Google Sign-In will likely fail. Please tap the three dots in the top right corner and select <b>'Open in Chrome'</b> or <b>'Open in system browser'</b>.";
+    loginError.classList.remove('hidden');
+    loginError.style.backgroundColor = "#fff3cd";
+    loginError.style.color = "#856404";
+    loginError.style.padding = "10px";
+    loginError.style.borderRadius = "4px";
+    loginError.style.marginTop = "15px";
+}
+
 if (googleSignInBtn) {
     googleSignInBtn.addEventListener('click', async () => {
         try {
@@ -1000,6 +1023,9 @@ userForm.addEventListener('submit', async (e) => {
 
     if (id) {
         await apiCall(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+        if (currentUser && currentUser.id === id) {
+            currentUser = { ...currentUser, ...data };
+        }
     } else {
         // For new users, we can't create Auth accounts from client without Admin SDK,
         // but we can create the user document so they have roles when they sign in.
