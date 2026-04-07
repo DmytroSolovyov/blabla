@@ -189,7 +189,6 @@ function checkAuth() {
 }
 
 const googleSignInBtn = document.getElementById('google-signin-btn');
-const loginError = document.getElementById('login-error');
 
 function isInAppBrowser() {
     const ua = navigator.userAgent || navigator.vendor || window.opera;
