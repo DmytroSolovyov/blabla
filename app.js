@@ -153,23 +153,31 @@ function checkAuth() {
                     if (userDoc.exists()) {
                         userData = userDoc.data();
                     } else {
-                        // Check if admin pre-registered them by email
-                        const q = query(collection(db, 'users'), where('email', '==', user.email));
-                        const querySnapshot = await getDocs(q);
-                        if (!querySnapshot.empty) {
-                            const preRegDoc = querySnapshot.docs[0];
+                        // Check if admin pre-registered them by email (using email as doc ID)
+                        let preRegDoc = await getDoc(doc(db, 'users', user.email));
+                        if (preRegDoc.exists()) {
                             userData = preRegDoc.data();
-                            // Move data to UID doc
-                            await setDoc(doc(db, 'users', user.uid), userData);
-                            await deleteDoc(doc(db, 'users', preRegDoc.id));
                         } else {
-                            // Create default user profile
-                            userData = { email: user.email, role: 'pending' };
-                            // If it's the admin email, make them boss
-                            if (user.email === 'dmytro.solovyov1998@gmail.com') {
-                                userData.role = 'boss';
+                            // Check if admin pre-registered them by email (using random doc ID, old method)
+                            const q = query(collection(db, 'users'), where('email', '==', user.email));
+                            const querySnapshot = await getDocs(q);
+                            if (!querySnapshot.empty) {
+                                const oldPreRegDoc = querySnapshot.docs[0];
+                                userData = oldPreRegDoc.data();
+                            } else {
+                                // If it's the admin email, make them boss
+                                if (user.email === 'dmytro.solovyov1998@gmail.com') {
+                                    userData = { email: user.email, role: 'boss' };
+                                    await setDoc(doc(db, 'users', user.uid), userData);
+                                } else {
+                                    // Reject unknown users
+                                    await signOut(auth);
+                                    customAlert("Access Denied: Your email has not been registered. Please ask a manager to add your email first.");
+                                    showAuthScreen();
+                                    resolve();
+                                    return;
+                                }
                             }
-                            await setDoc(doc(db, 'users', user.uid), userData);
                         }
                     }
                     
@@ -1183,17 +1191,7 @@ userForm.addEventListener('submit', async (e) => {
             currentUser = { ...currentUser, ...data };
         }
     } else {
-        // For new users, we can't create Auth accounts from client without Admin SDK,
-        // but we can create the user document so they have roles when they sign in.
-        // We'll use their email as the document ID for simplicity, or let Firestore generate one.
-        // Actually, since we need their UID, we should just let Firestore generate an ID,
-        // and when they sign in, we can link it if needed.
-        // Wait, checkAuth uses user.uid. If we create a document with a random ID, it won't match.
-        // So we should use the email as the document ID for users?
-        // Let's just create a document. The checkAuth logic creates a new profile if it doesn't exist.
-        // If an admin creates a user, they are pre-registering them.
-        // Let's use the email as the document ID to make it easy to find.
-        await apiCall('/api/users', { method: 'POST', body: JSON.stringify(data) });
+        await apiCall(`/api/users/${data.email}`, { method: 'PUT', body: JSON.stringify(data) });
     }
     
     closeModal();
