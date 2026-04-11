@@ -164,7 +164,7 @@ function checkAuth() {
                             await deleteDoc(doc(db, 'users', preRegDoc.id));
                         } else {
                             // Create default user profile
-                            userData = { email: user.email, role: 'worker' };
+                            userData = { email: user.email, role: 'pending' };
                             // If it's the admin email, make them boss
                             if (user.email === 'dmytro.solovyov1998@gmail.com') {
                                 userData.role = 'boss';
@@ -253,6 +253,29 @@ function showMainScreen() {
         else el.classList.add('hidden');
     });
 
+    if (currentUser.role === 'pending') {
+        document.querySelectorAll('[data-tab="calendar"]').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('[data-tab="reports"]').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('[data-tab="workers"]').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('[data-tab="locations"]').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('[data-tab="users"]').forEach(el => el.style.display = 'none');
+        switchTab('pending');
+        return;
+    } else {
+        document.querySelectorAll('[data-tab="calendar"]').forEach(el => el.style.display = 'flex');
+        document.querySelectorAll('[data-tab="reports"]').forEach(el => el.style.display = 'flex');
+    }
+
+    if (currentUser.role === 'worker') {
+        document.querySelectorAll('[data-tab="workers"]').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('[data-tab="locations"]').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('[data-tab="users"]').forEach(el => el.style.display = 'none');
+    } else {
+        document.querySelectorAll('[data-tab="workers"]').forEach(el => el.style.display = 'flex');
+        document.querySelectorAll('[data-tab="locations"]').forEach(el => el.style.display = 'flex');
+        document.querySelectorAll('[data-tab="users"]').forEach(el => el.style.display = 'flex');
+    }
+
     switchTab('calendar');
     updateLocationSelects();
     renderCalendar();
@@ -301,6 +324,14 @@ goToLocationsBtn.addEventListener('click', () => switchTab('locations'));
 
 // Data Loading
 async function loadInitialData() {
+    if (currentUser.role === 'pending') {
+        workers = [];
+        locations = [];
+        shifts = [];
+        users = [];
+        return;
+    }
+
     [workers, locations] = await Promise.all([
         apiCall('/api/workers'),
         apiCall('/api/locations')

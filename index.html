@@ -80,6 +80,15 @@
             </header>
 
             <main class="main-content">
+                <!-- Pending Tab -->
+                <div id="tab-pending" class="tab-content hidden">
+                    <div class="empty-state">
+                        <i data-lucide="clock" class="empty-icon"></i>
+                        <h2>Waiting for Approval</h2>
+                        <p>Your account is currently pending. Please wait for the manager to approve your access and assign you a worker profile.</p>
+                    </div>
+                </div>
+
                 <!-- Calendar Tab -->
                 <div id="tab-calendar" class="tab-content active">
                     <div id="no-locations-msg" class="empty-state hidden">
@@ -300,6 +309,7 @@
             <div class="form-group">
                 <label for="user-role">Role</label>
                 <select id="user-role" required>
+                    <option value="pending">Pending</option>
                     <option value="worker">Worker</option>
                     <option value="manager">Manager</option>
                     <option value="boss">Boss</option>
