@@ -1,0 +1,5 @@
+{
+  "name": "Bellacaffe Shift Manager",
+  "description": "A vanilla HTML/JS/CSS shift management application with SQLite backend.",
+  "requestFramePermissions": []
+}

@@ -635,8 +635,10 @@ async function renderReports() {
     let query = '/api/shifts?';
     if (monthInput) {
         const [year, month] = monthInput.split('-');
+        const yearInt = parseInt(year, 10);
+        const monthInt = parseInt(month, 10);
         const startDate = `${year}-${month}-01`;
-        const lastDay = new Date(year, month, 0).getDate();
+        const lastDay = new Date(yearInt, monthInt, 0).getDate();
         const endDate = `${year}-${month}-${lastDay}`;
         query += `start_date=${startDate}&end_date=${endDate}`;
     }
@@ -666,21 +668,154 @@ async function renderReports() {
     const tbody = document.getElementById('reports-table-body');
     tbody.innerHTML = '';
     
+    const isAdmin = currentUser.role === 'boss' || currentUser.role === 'manager';
+    
     workers.forEach(worker => {
         const hours = workerHours[worker.id] || 0;
+        const canExport = isAdmin || currentUser.worker_id === worker.id;
+        const exportBtn = canExport ? `<button class="icon-btn" onclick="exportWorkerPDF('${worker.id}', '${monthInput}')" title="Export PDF"><i data-lucide="download"></i></button>` : '';
         
         tbody.innerHTML += `
             <tr>
-                <td style="display: flex; align-items: center; gap: 0.5rem;">
-                    <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${worker.color}"></div>
-                    ${worker.name}
+                <td>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${worker.color}"></div>
+                        ${worker.name}
+                    </div>
                 </td>
                 <td>${worker.position}</td>
                 <td style="font-weight: bold;">${hours.toFixed(1)}</td>
+                <td>${exportBtn}</td>
             </tr>
         `;
     });
+    
+    lucide.createIcons();
 }
+
+async function exportWorkerPDF(workerId, monthInput) {
+    try {
+        if (!monthInput) {
+            alert("Please select a month first.");
+            return;
+        }
+
+        const worker = workers.find(w => w.id === workerId);
+        if (!worker) return;
+
+        const [yearStr, monthStr] = monthInput.split('-');
+        const year = parseInt(yearStr);
+        const month = parseInt(monthStr);
+        
+        const startDate = `${yearStr}-${monthStr}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const endDate = `${yearStr}-${monthStr}-${lastDay}`;
+        
+        // Fetch shifts for this month
+        const shiftsData = await apiCall(`/api/shifts?start_date=${startDate}&end_date=${endDate}`);
+        const workerShifts = shiftsData.filter(s => s.worker_id === workerId);
+
+        if (!window.jspdf) {
+            throw new Error("jsPDF library not loaded");
+        }
+
+        const { jsPDF } = window.jspdf;
+        window.jsPDF = jsPDF; // Required for autotable in some environments
+        const doc = new jsPDF();
+
+        doc.setFontSize(18);
+        doc.text(`Hours Report: ${worker.name}`, 14, 22);
+        doc.setFontSize(12);
+        doc.text(`Month: ${monthInput}`, 14, 30);
+
+        const tableData = [];
+        let monthReg = 0;
+        let monthOT = 0;
+        let monthTotal = 0;
+
+        let weekReg = 0;
+        let weekOT = 0;
+        let weekTotal = 0;
+        
+        let weekNumber = 1;
+
+        for (let day = 1; day <= lastDay; day++) {
+            const dateStr = `${yearStr}-${monthStr}-${day.toString().padStart(2, '0')}`;
+            const dateObj = new Date(year, month - 1, day);
+            const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+            
+            const dayShifts = workerShifts.filter(s => s.date === dateStr);
+            let dailyHours = 0;
+            
+            dayShifts.forEach(shift => {
+                if (!shift.start_time || !shift.end_time) return;
+                const [startH, startM] = shift.start_time.split(':').map(Number);
+                const [endH, endM] = shift.end_time.split(':').map(Number);
+                let startDec = startH + (startM / 60);
+                let endDec = endH + (endM / 60);
+                let diff = endDec - startDec;
+                if (diff < 0) diff += 24;
+                dailyHours += diff;
+            });
+
+            let regHours = Math.min(8, dailyHours);
+            let otHours = Math.max(0, dailyHours - 8);
+
+            weekReg += regHours;
+            weekOT += otHours;
+            weekTotal += dailyHours;
+
+            monthReg += regHours;
+            monthOT += otHours;
+            monthTotal += dailyHours;
+
+            tableData.push([
+                dateStr,
+                dayName,
+                dailyHours > 0 ? regHours.toFixed(2) : '-',
+                dailyHours > 0 ? otHours.toFixed(2) : '-',
+                dailyHours > 0 ? dailyHours.toFixed(2) : '-'
+            ]);
+
+            // If Sunday or last day of month, push weekly total
+            if (dateObj.getDay() === 0 || day === lastDay) {
+                tableData.push([
+                    { content: `Week ${weekNumber} Total`, colSpan: 2, styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                    { content: weekReg.toFixed(2), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                    { content: weekOT.toFixed(2), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                    { content: weekTotal.toFixed(2), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }
+                ]);
+                weekReg = 0;
+                weekOT = 0;
+                weekTotal = 0;
+                weekNumber++;
+            }
+        }
+
+        // Monthly Total
+        tableData.push([
+            { content: `Monthly Total`, colSpan: 2, styles: { fontStyle: 'bold', fillColor: [220, 220, 220] } },
+            { content: monthReg.toFixed(2), styles: { fontStyle: 'bold', fillColor: [220, 220, 220] } },
+            { content: monthOT.toFixed(2), styles: { fontStyle: 'bold', fillColor: [220, 220, 220] } },
+            { content: monthTotal.toFixed(2), styles: { fontStyle: 'bold', fillColor: [220, 220, 220] } }
+        ]);
+
+        doc.autoTable({
+            startY: 35,
+            head: [['Date', 'Day', 'Regular Hours', 'Overtime (>8h)', 'Total Hours']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: { fillColor: [59, 130, 246] }
+        });
+
+        doc.save(`Hours_Report_${worker.name.replace(/\s+/g, '_')}_${monthInput}.pdf`);
+    } catch (error) {
+        console.error("PDF Export Error:", error);
+        alert("Error exporting PDF: " + error.message);
+    }
+}
+
+window.exportWorkerPDF = exportWorkerPDF;
 
 // Workers
 document.getElementById('add-worker-btn').addEventListener('click', () => openWorkerModal());
