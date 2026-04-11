@@ -316,6 +316,13 @@ async function loadInitialData() {
     }
 }
 
+function formatDateLocal(date) {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 async function loadShifts() {
     const locId = locationSelect.value;
     if (!locId) return;
@@ -333,8 +340,8 @@ async function loadShifts() {
     const endDay = end.getDay();
     end.setDate(end.getDate() + (endDay === 0 ? 0 : 7 - endDay));
     
-    const startStr = start.toISOString().split('T')[0];
-    const endStr = end.toISOString().split('T')[0];
+    const startStr = formatDateLocal(start);
+    const endStr = formatDateLocal(end);
     
     shifts = await apiCall(`/api/shifts?location_id=${locId}&start_date=${startStr}&end_date=${endStr}`);
 }
@@ -567,7 +574,7 @@ function renderCalendar() {
     const isAdmin = currentUser.role === 'boss' || currentUser.role === 'manager';
 
     for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = formatDateLocal(date);
         const isToday = date.getTime() === today.getTime();
         const isOtherMonth = date.getMonth() !== month;
         

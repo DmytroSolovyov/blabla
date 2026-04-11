@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserDoc() {
+      let doc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return doc == null ? null : doc.data;
+    }
+    
+    function isBossOrManager() {
+      let doc = getUserDoc();
+      return doc != null && (doc.role == 'boss' || doc.role == 'manager');
+    }
+    
+    function isWorker() {
+      let doc = getUserDoc();
+      return doc != null && doc.role == 'worker';
+    }
+    
+    function getWorkerId() {
+      let doc = getUserDoc();
+      return doc != null ? doc.worker_id : null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function hasOnlyAllowedFields(allowedFields) {
+      return request.resource.data.keys().hasOnly(allowedFields);
+    }
+    
+    function isValidString(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+             request.resource.data[field].size() >= minLen &&
+             request.resource.data[field].size() <= maxLen;
+    }
+    
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+    
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    
+    function isValidUser() {
+      return isValidEmail(request.resource.data.email) &&
+             request.resource.data.role in ['boss', 'manager', 'worker'] &&
+             (!('worker_id' in request.resource.data) || request.resource.data.worker_id == null || request.resource.data.worker_id is string);
+    }
+    
+    function isValidWorker() {
+      return hasOnlyAllowedFields(['name', 'position', 'color']) &&
+             isValidString('name', 1, 100) &&
+             isValidString('position', 1, 100) &&
+             isValidString('color', 1, 20);
+    }
+    
+    function isValidLocation() {
+      return hasOnlyAllowedFields(['name']) &&
+             isValidString('name', 1, 100);
+    }
+    
+    function isValidShift() {
+      return hasOnlyAllowedFields(['location_id', 'worker_id', 'date', 'start_time', 'end_time', 'notes']) &&
+             isValidString('location_id', 1, 100) &&
+             isValidString('worker_id', 1, 100) &&
+             isValidString('date', 10, 10) &&
+             isValidString('start_time', 4, 5) &&
+             isValidString('end_time', 4, 5) &&
+             isValidOptionalString('notes', 0, 1000);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Anyone authenticated can read users (needed for assigning workers to users, or checking roles)
+      // Actually, let's restrict to boss/manager or self
+      allow read: if isAuthenticated() && (isOwner(userId) || isBossOrManager() || resource.data.email == request.auth.token.email);
+      // Only boss/manager can create/update users, or a new user can create their own profile if it doesn't exist (bootstrapping)
+      // For bootstrapping the first boss:
+      allow create: if isAuthenticated() && isValidUser() && (
+        isBossOrManager() || 
+        (request.auth.token.email == "dmytro.solovyov1998@gmail.com" && request.auth.token.email_verified == true && request.resource.data.role == 'boss') ||
+        (isOwner(userId) && request.resource.data.role == 'worker')
+      );
+      allow update: if isAuthenticated() && isValidUser() && isBossOrManager();
+      allow delete: if isAuthenticated() && (isBossOrManager() || resource.data.email == request.auth.token.email);
+    }
+
+    match /workers/{workerId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isBossOrManager() && isValidWorker();
+      allow delete: if isAuthenticated() && isBossOrManager();
+    }
+
+    match /locations/{locationId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isBossOrManager() && isValidLocation();
+      allow delete: if isAuthenticated() && isBossOrManager();
+    }
+
+    match /shifts/{shiftId} {
+      allow read: if isAuthenticated();
+      
+      // Boss/Manager can do anything. Worker can only create/update/delete their own shifts.
+      allow create: if isAuthenticated() && isValidShift() && (
+        isBossOrManager() || 
+        (isWorker() && request.resource.data.worker_id == getWorkerId())
+      );
+      
+      allow update: if isAuthenticated() && isValidShift() && (
+        isBossOrManager() || 
+        (isWorker() && request.resource.data.worker_id == getWorkerId() && resource.data.worker_id == getWorkerId())
+      );
+      
+      allow delete: if isAuthenticated() && (
+        isBossOrManager() || 
+        (isWorker() && resource.data.worker_id == getWorkerId())
+      );
+    }
+  }
+}
