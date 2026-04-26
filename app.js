@@ -1,4 +1,4 @@
-import { auth, db, provider, signInWithPopup, signOut, onAuthStateChanged, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where } from './firebase-init.js';
+import { auth, db, provider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where } from './firebase-init.js';
 
 // Add polyfill initialization at the top of app.js
 MobileDragDrop.polyfill({
@@ -128,7 +128,7 @@ async function apiCall(url, options = {}) {
             await setDoc(newDocRef, body);
             return { id: newDocRef.id, ...body };
         } else if (method === 'PUT') {
-            await updateDoc(doc(db, collectionName, docId), body);
+            await setDoc(doc(db, collectionName, docId), body, { merge: true });
             return { id: docId, ...body };
         } else if (method === 'DELETE') {
             await deleteDoc(doc(db, collectionName, docId));
@@ -226,9 +226,22 @@ if (googleSignInBtn) {
         } catch (e) {
             loginError.textContent = e.message;
             loginError.classList.remove('hidden');
+            
+            if (e.code === 'auth/popup-blocked' || e.code === 'auth/unauthorized-domain') {
+                 loginError.innerHTML += "<br>If popup is blocked, please allow popups. Important: Ensure your domain is added to Firebase > Authentication > Settings > Authorized domains.";
+            } else if (e.code === 'auth/network-request-failed') {
+                 // Try redirect if network request fails (sometimes happens in some mobile browsers)
+                 await signInWithRedirect(auth, provider);
+            }
         }
     });
 }
+
+// Check for errors from a previous redirect login attempt
+getRedirectResult(auth).catch((error) => {
+    loginError.textContent = error.message;
+    loginError.classList.remove('hidden');
+});
 
 async function logout() {
     await signOut(auth);
