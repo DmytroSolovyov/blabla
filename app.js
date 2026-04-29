@@ -197,6 +197,7 @@ function checkAuth() {
 }
 
 const googleSignInBtn = document.getElementById('google-signin-btn');
+const googleSignInRedirectBtn = document.getElementById('google-signin-redirect-btn');
 
 function isInAppBrowser() {
     const ua = navigator.userAgent || navigator.vendor || window.opera;
@@ -233,6 +234,17 @@ if (googleSignInBtn) {
                  // Try redirect if network request fails (sometimes happens in some mobile browsers)
                  await signInWithRedirect(auth, provider);
             }
+        }
+    });
+}
+
+if (googleSignInRedirectBtn) {
+    googleSignInRedirectBtn.addEventListener('click', async () => {
+        try {
+            await signInWithRedirect(auth, provider);
+        } catch (e) {
+            loginError.textContent = e.message;
+            loginError.classList.remove('hidden');
         }
     });
 }
